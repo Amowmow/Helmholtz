@@ -167,42 +167,73 @@ def cross_product(vector1, vector2):
 
 
 
-def Helm(spiral1, spiral2, dl1, dl2, measured_position, I):
+def Helm(radius, wire_diameter, turns_per_layer, layers, dt, z_offset,
+        grid_spacing, measured_position, I):
     '''Desription: Function that calculates the magnetic field produced by two coils
     in a helmholtz configuration. The magnetic field is calculated at an array of points
     in space with the Biot-Savart law. Is possible to that it will calculate field given
     any line of current and its dl vector. Further testing is needed to confirm this.
     Inputs:
-        spiral1: array of x, y, z values of the first spiral.
-        Dimensions: (n, 3) VERY IMPOTANT that all n values are the same for all inputs.
+        radius: radius of the spiral
 
-        spiral2: array of x, y, z values of the second spiral.
-        Dimensions: (n, 3)
+        wire_diameter: Diameter of the wire to be used.
 
-        dl1: array of x, y, z values of the dl vector of the first spiral. Derivative
-        of the position vector of spiral1.
-        Dimensions: (n, 3)
+        turns_per_layer: number of turns in one layer of the spiral
 
-        dl2: array of x, y, z values of the dl vector of the second spiral. Derivative
-        of the position vector of spiral2.
+        layers: number of layers in the total coil. Input the actual
+            number of layers, not the number of layers minus 1.
+
+        dt: number of points to paramaterize the spiral. More points will
+            make the spiral smoother and the total approximation more accurate.
+            But also more computationally expensive.
+
+        z_offset: offset of the spiral in the z direction.
+
+        grid_spacing: spacing of the grid in the x, y, and z directions. 
+        The grid will be a cube with the origin at the center. The grid will
+        be from -grid_spacing to grid_spacing in all directions.
 
         measured_position: array of x, y, z values of the points in space where the
         magnetic field is to be calculated.
-        Dimensions: (m, 3)
 
         I: current in the wire (A)
 
     Returns:
         B_vec: array of x, y, z values of the magnetic field at the points in space.
         Indexing corresponds to the index of the measured_position array.
-        Both will need to be reshaped to the shape of the grid to be plotted.
+        Both will need to be reshaped to the shape of the grid to be plotted. 
         Dimensions: (m, 3)
     '''
-    constants = I*mu_0/(4*np.pi)
+    constants = I*mu_0/(4*np.pi) 
+  
+
+    #spiral1: array of x, y, z values of the first spiral.
+    #Dimensions: (n, 3) VERY IMPOTANT that all n values are the same for all inputs.
+    spiral1 = spiral(radius, wire_diameter, turns_per_layer, layers, dt, z_offset)
+    
+    #spiral2: array of x, y, z values of the second spiral.
+    #Dimensions: (n, 3)
+    spiral2 = spiral(radius, wire_diameter, -turns_per_layer, layers, dt, -z_offset)
+
     #delta factor to be used as the dx in the trapz function
     #len(spiral1) is used as the number of points in the spiral
-    delta = 2*np.pi*turns/len(spiral1)
-    
+    delta = 2*np.pi*turns_per_layer*layers/len(spiral1)
+
+    #dl1: array of x, y, z values of the dl vector of the first spiral. Derivative
+    #of the position vector of spiral1.
+    #Dimensions: (n, 3)
+    dl1 = dl(radius, wire_diameter, turns_per_layer, layers, dt)
+
+    #dl2: array of x, y, z values of the dl vector of the second spiral. Derivative
+    #of the position vector of spiral2.
+    #Dimensions: (n, 3)
+    dl2 = dl(radius, wire_diameter, -turns_per_layer, layers, dt)
+
+    #measured_position: array of x, y, z values of the points in space where the
+    #magnetic field is to be calculated.
+    #Dimensions: (m, 3)
+    measured_position = np.linspace(-grid_spacing, grid_spacing, points)
+
     #initialize the array to store the magnetic field at each point.
     # this index corresponds to the index of the measured_position array.
     # Stores vector components of the magnetic field at each point.
@@ -245,7 +276,7 @@ def Helm(spiral1, spiral2, dl1, dl2, measured_position, I):
         B_vec[i] = constants*np.trapz(cross1/mag_cubed1, dx = delta, axis = 0)
         B_vec[i] += constants*np.trapz(cross2/mag_cubed2, dx = delta, axis = 0)
 
-        
+
     return B_vec
 
 
@@ -267,15 +298,15 @@ stacks = 10 #number of stacked spirals
 z_offset = radius/2 #offset of the spiral in the z direction
 
 #Paramaterize the spiral
-spiral1 = spiral(radius, wire_diameter, turns, stacks, dt, z_offset)
-spiral2 = spiral(radius, wire_diameter, -turns, stacks, dt, -z_offset)
+#spiral1 = spiral(radius, wire_diameter, turns, stacks, dt, z_offset)
+#spiral2 = spiral(radius, wire_diameter, -turns, stacks, dt, -z_offset)
 
 #debug code
-print(len(spiral1))
+#print(len(spiral1))
 
 #Paramaterize dl of the spiral
-dl1 = dl(radius, wire_diameter, turns, stacks, dt)
-dl2 = dl(radius, wire_diameter, -turns, stacks, dt)
+#dl1 = dl(radius, wire_diameter, turns, stacks, dt)
+#dl2 = dl(radius, wire_diameter, -turns, stacks, dt)
 #Paramaterize the position of the point being measured
 x1 = np.linspace(-length, length, points)
 y1 = np.linspace(-length, length, points)
@@ -298,12 +329,12 @@ X2, Z2 = np.meshgrid(x2, z2)
 measured_position_xz = np.column_stack((X2.flatten(), np.full(points**2, y2), Z2.flatten()))
 
 # XY plane calculations
-B_vec_xy = Helm(spiral1, spiral2, dl1, dl2, measured_position_xy, I)
+B_vec_xy = Helm(radius, wire_diameter, turns, stacks, dt, z_offset, points, measured_position_xy, I)
 B_mag_xy = vector_magnitude_3d(B_vec_xy)
 B_z_degrees_xy = np.arccos(B_vec_xy[:,2]/B_mag_xy)*(180/np.pi)
 
 # XZ plane calculations
-B_vec_xz = Helm(spiral1, spiral2, dl1, dl2, measured_position_xz, I)
+B_vec_xz = Helm(radius, wire_diameter, turns, stacks, dt, z_offset, points, measured_position_xz, I)
 B_mag_xz = vector_magnitude_3d(B_vec_xz)
 B_z_degrees_xz = np.arccos(B_vec_xz[:,2]/B_mag_xz)*(180/np.pi)
 
